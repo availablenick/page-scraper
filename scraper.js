@@ -1,6 +1,6 @@
-const https = require('https');
-const http = require('http');
 const fs = require('fs');
+const https = require('https');
+const urlm = require('url');
 
 function filterHTMLComments(code) {
   let filteredCode = '';
@@ -17,26 +17,107 @@ function filterHTMLComments(code) {
   return filteredCode;
 }
 
-function connectTo(host, path) {
-  url = host + path;
+function getContentType(url) {
+  return new Promise((resolve) => {
+    info = new URL(url);
+    try {
+      https.get(url, { protocol: 'https:' }, (res) => {
+        resolve(res.headers['content-type']);
+      });
+    } catch(e) {
+      https.get(url, { protocol: 'http:' }, (res) => {
+        resolve(res.headers['content-type']);
+      });
+    }
+  });
+}
+
+function getDirectoryURL(url) {
+  let i = 0;
+  for (i = url.length - 1; i >= 0 && url[i] !== '/'; i--);
+
+  return url.slice(0, i + 1);
+}
+
+/* function getParentDirectoryURL(url) {
+  let localURL = url;
+  if (!isDirectory(localURL))
+    localURL = getDirectoryURL(localURL);
+
+  let i = localURL.length - 1;
+  if (localURL[i] === '/')
+    i--;
+
+  while (localURL[i] !== '/') {
+    i--;
+  }
+
+  return localURL.slice(0, i);
+} */
+
+/* function makeURL(url, path) {
+  // Check whether path is absolute
+  urlReg.lastIndex = 0;
+  if (urlReg.test(path)) {
+    console.log('no changes on:', path);
+    return path;
+  }
+
+  // Check whether path is relative to root URL
+  let directory = '';
+  let amendedPath = path;
+  if (path[0] === '/') {
+    directory = rootURL;
+    amendedPath = amendedPath.slice(1);
+  } else {
+    directory = getDirectoryURL(url);
+  }
+
+  // Check whether path has ../ or ./ and
+  if (!/https?/gi.test(amendedPath)) {
+    if (/^\/?\.\.\/.+/mg.test(amendedPath)) {
+      directory = getParentDirectoryURL(directory);
+      amendedPath = amendedPath.slice(3);
+    }
+  }
+
+  // If url corresponds to a directory, it must end with a slash,
+  // otherwise, it mustn't.
+  if (!/\.[^.]+/gi.test(amendedPath)) { // Check whether it is not a file
+    if (amendedPath[amendedPath.length - 1] !== '/')
+      amendedPath += '/';
+  }
+
+  return directory + '/' + amendedPath;
+} */
+
+function connectTo(url) {
   console.log('\nzzzzzzzzzzzzzzzzzzz');
+  let rootz = getDirectoryURL(url);
   console.log('current checking:', url);
+  console.log(rootz);
   console.log('zzzzzzzzzzzzzzzzzzz\n');
 
   anchorReg.lastIndex = 0;
-  formatReg.lastIndex = 0;
-  hostReg.lastIndex = 0;
+  urlReg.lastIndex = 0;
   imgReg.lastIndex = 0;
 
-  return new Promise((resolve, reject) => {
-    https.get(url, (res) => {
+  return new Promise((resolve) => {
+    async function handleResponse(res) {
+      if (300 <= res.statusCode && res.statusCode <= 399) {
+        await connectTo(res.headers.location);
+        resolve();
+        return;
+      }
+
       let data = '';
       res.on('data', (chunk) => { data += chunk });
       res.on('end', async () => {
         console.log('data processed.');
         data = filterHTMLComments(data);
-        /* console.log('filtered data:');
-        console.log(data); */
+        console.log('filtered data length:');
+        console.log(data.length);
+        /* console.log(data); */
 
         let match = anchorReg.exec(data);
         let localInternalLinks = [];
@@ -44,129 +125,146 @@ function connectTo(host, path) {
         let localImageLinks = [];
         let localMiscLinks = [];
         while (match) {
-          href = match[1];
+          href = match[4];
           if (href[0] === '"')
             href = href.slice(1, href.length - 1);
 
           match = anchorReg.exec(data);
-          if (hostReg.test(href) || !/https?/ig.test(href)) {
-            let m = hostReg.exec(href);
-            if (m) {
-              href = href.slice(hostReg.lastIndex, href.length);
-            }
-
-            if (formatReg.test(href)) {
-              imageLinks.push(href);
-              localImageLinks.push(href);
-            } else if (/mailto:/ig.test(href)){
+          if (urlReg.test(href) || !/https?/gi.test(href)) {
+            if (/mailto:/gi.test(href)) {
               miscLinks.push(href);
               localMiscLinks.push(href);
             } else {
-              localInternalLinks.push(href);
+              //let newURL = makeURL(url, href);
+              let newURL = urlm.resolve(url, href);
+              contentType = await getContentType(newURL);
+              if (/text\/html/gi.test(contentType)) {
+                localInternalLinks.push(href);
+              } else {
+                miscLinks.push(href);
+                localMiscLinks.push(href);
+              }
             }
-          } else if (/https?/ig.test(href)){
+          } else {
             externalLinks.push(href);
             localExternalLinks.push(href);
-          } else {
-            miscLinks.push(href);
-            localMiscLinks.push(href);
           }
         }
 
         match = imgReg.exec(data);
         while (match) {
-          src = match[1];
-          if (!/https?/ig.test(src)) {
-            src = host + src;
-          }
+          src = match[4];
+          if (src[0] === '"')
+            src = src.slice(1, src.length - 1);
 
-          localImageLinks.push(src);
+          //let newURL = makeURL(url, src);
+          let newURL = urlm.resolve(url, src);
+          imageLinks.push(newURL);
+          localImageLinks.push(newURL);
           match = imgReg.exec(data);
         }
 
-        console.log('=================== INTERNAL LINKS ===================');
-        for (let link of localInternalLinks) {
-          console.log('   ', link);
+        /* console.log('=================== INTERNAL LINKS ===================');
+        for (let i = 0; i < localInternalLinks.length; i++) {
+          link = localInternalLinks[i];
+          console.log('   ', i, link);
+
+          //let newURL = urlm.resolve(url, link);
+          //internalLinks.push(newURL);
         }
 
         console.log('=================== IMAGE LINKS ===================');
-        for (let link of localImageLinks) {
-          console.log('   ', link);
+        for (let i = 0; i < localImageLinks.length; i++) {
+          link = localImageLinks[i];
+          console.log('   ', i, link);
         }
 
         console.log('=================== EXTERNAL LINKS ===================');
-        for (let link of localExternalLinks) {
-          console.log('   ', link);
+        for (let i = 0; i < localExternalLinks.length; i++) {
+          link = localExternalLinks[i];
+          console.log('   ', i, link);
         }
 
         console.log('=================== MISC LINKS ===================');
-        for (let link of localMiscLinks) {
-          console.log('   ', link);
-        }
+        for (let i = 0; i < localMiscLinks.length; i++) {
+          link = localMiscLinks[i];
+          console.log('   ', i, link);
+        } */
 
         for (let path of localInternalLinks) {
-          //console.log('next path:', path);
-          if (!paths.has(path) || paths.get(path) === false) {
-            paths.set(path, true);
-            internalLinks.push(host + path);
-            await connectTo(host, path);
+          let newURL = urlm.resolve(url, path);
+          if (!paths.has(newURL) || paths.get(newURL) === false) {
+            paths.set(newURL, true);
+            internalLinks.push(newURL);
+            await connectTo(newURL);
           }
         }
 
         resolve();
-        
-        if (path === initialPath) {
-          console.log('=================== INTERNAL LINKS ===================');
-          for (let link of internalLinks) {
-            console.log('   ', link);
-          }
-
-          console.log('=================== IMAGE LINKS ===================');
-          for (let link of imageLinks) {
-            console.log('   ', link);
-          }
-
-          console.log('=================== EXTERNAL LINKS ===================');
-          for (let link of externalLinks) {
-            console.log('   ', link);
-          }
-
-          console.log('=================== MISC LINKS ===================');
-          for (let link of miscLinks) {
-            console.log('   ', link);
-          }
-        }
       });
-    });
+    }
+
+    try {
+      https.get(url, { protocol: 'https:' }, handleResponse);
+    } catch (e) {
+      https.get(url, { protocol: 'http:' }, handleResponse);
+    }
   });
-  /* } catch (e) {
-    http.get(url, handleResponse);
-  } */
 }
 
 /* let host = 'http://localhost:8000';
 let initialPath = '/p1.html'; */
-let host = 'https://www.ime.usp.br/~cris/';
-initialPath = '';
+
+let initialURL = 'https://www.ime.usp.br/~cris/aulas';
+if (!/https?:\/\//gi.test(initialURL))
+  initialURL = 'https://' + initialURL;
+
+let infoURL = new URL(initialURL);
+let initialDirectoryURL = getDirectoryURL(initialURL);
+if (initialDirectoryURL.length < infoURL.origin.length)
+  initialDirectoryURL = infoURL.origin;
+  infoURL = new URL(initialDirectoryURL);
+
+console.log('directory:', initialDirectoryURL);
 
 let paths = new Map();
-paths.set(initialPath, true);
+paths.set(initialURL, true);
 
 let internalLinks = [];
 let externalLinks = [];
 let imageLinks = [];
 let miscLinks = [];
 
-let imgFormats = [
-  'bmp',
-  'jpg',
-  'jpeg',
-  'png'
-];
+let anchorReg = /<a( |\r\n|\r|\n)+(.*( |\r\n|\r|\n)+)?href=("[^"]+"|[^"][^ >]*)/gi;
+let imgReg = /<img( |\r\n|\r|\n)+(.+( |\r\n|\r|\n)+)?src=("[^"]+"|[^"][^ >]*)/gi;
+let urlReg = new RegExp(infoURL.host + infoURL.pathname, 'ig');
 
-let anchorReg = /<a href="?([^"]+?)"?>/ig;
-let formatReg = new RegExp(imgFormats.join('|'), 'ig');
-let hostReg = new RegExp(host, 'g');
-let imgReg = /<img.*src="?([^"]+)"?\/?.*>/ig;
+connectTo(initialURL)
+  .then(() => {
+    console.log();
+    console.log();
+    console.log();
+    console.log('=================== INTERNAL LINKS ===================');
+    for (let i = 0; i < internalLinks.length; i++) {
+      link = internalLinks[i];
+      console.log('   ', i, link);
+    }
 
-connectTo(host, initialPath);
+    console.log('=================== IMAGE LINKS ===================');
+    for (let i = 0; i < imageLinks.length; i++) {
+      link = imageLinks[i];
+      console.log('   ', i, link);
+    }
+
+    console.log('=================== EXTERNAL LINKS ===================');
+    for (let i = 0; i < externalLinks.length; i++) {
+      link = externalLinks[i];
+      console.log('   ', i, link);
+    }
+
+    console.log('=================== MISC LINKS ===================');
+    for (let i = 0; i < miscLinks.length; i++) {
+      link = miscLinks[i];
+      console.log('   ', i, link);
+    }
+  });

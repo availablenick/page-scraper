@@ -185,10 +185,16 @@ function connectTo(url) {
         
           // Remove protocol and query string
           let cleanURL = newURL.replace(/https?:\/\//i, '').replace(/\?.*/i, '');
-          if (!visitedURLS.has(cleanURL) || visitedURLS.get(cleanURL) === false) {
-            visitedURLS.set(cleanURL, true);
-            await connectTo(newURL);
+          if (process.argv[3])
+            var searchMode = process.argv[3];
+
+          if (searchMode !== 'single-page') {
+            if (!visitedURLS.has(cleanURL) || visitedURLS.get(cleanURL) === false) {
+              visitedURLS.set(cleanURL, true);
+              await connectTo(newURL);
+            }
           }
+          
         }
 
         resolve();

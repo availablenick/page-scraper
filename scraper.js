@@ -9,8 +9,10 @@ let externalLinks = [];
 let imageLinks = [];
 let miscLinks = [];
 
-let anchorReg = /<a( |\r\n|\r|\n)+(((?!href).)+( |\r\n|\r|\n)+)?href=("[^"]+"|[^"][^ >]*)/gi;
-let imageReg = /<img( |\r\n|\r|\n)+(((?!src).)+( |\r\n|\r|\n)+)?src=("[^"]+"|[^"][^ >]*)/gi;
+let anchorReg = /<a( |\r\n|\r|\n)+(((?!href).)+( |\r\n|\r|\n)+)?href( |\r\n|\r|\n)*=( |\r\n|\r|\n)*("[^"]+"|[^"][^ >]*)/gi;
+let anchorGroup = 7;
+let imageReg = /<img( |\r\n|\r|\n)+(((?!src).)+( |\r\n|\r|\n)+)?src( |\r\n|\r|\n)*=( |\r\n|\r|\n)*("[^"]+"|[^"][^ >]*)/gi;
+let imageGroup = 7;
 let urlReg = null;
 
 new Promise((resolve) => {
@@ -45,16 +47,19 @@ new Promise((resolve) => {
   let initialDirectoryURL = getDirectoryURL(initialURL);
   if (initialDirectoryURL.length < infoURL.origin.length) {
     initialDirectoryURL = infoURL.origin;
-    infoURL = new URL(initialDirectoryURL);
   }
+
+  infoURL = new URL(initialDirectoryURL);
 
   console.log('\n===================================');
   console.log('initial URL:', initialURL);
+  console.log('directory:', initialDirectoryURL);
   console.log('===================================');
 
   visitedURLS.set(initialURL.replace(/https?:\/\//i, ''), true);
   storedURLS.set(initialURL, true);
   urlReg = new RegExp(infoURL.host + infoURL.pathname, 'i');
+  console.log('regex:', infoURL.host + infoURL.pathname);
 
   connectTo(initialURL)
     .then(() => {
@@ -105,8 +110,11 @@ function connectTo(url) {
 
   return new Promise((resolve) => {
     async function handleResponse(res) {
+      console.log(res.statusCode);
       // URL Redirection
       if (300 <= res.statusCode && res.statusCode <= 399) {
+        console.log('Redirection');
+        console.log('===========================================');
         await connectTo(res.headers.location);
         resolve();
         return;
@@ -129,16 +137,16 @@ function connectTo(url) {
         let match = anchorReg.exec(data);
         let localLinks = [];
         while (match) {
-          href = match[5];
+          href = match[anchorGroup];
           if (href[0] === '"')
             href = href.slice(1, href.length - 1);
-          
+
           // Get links to other pages
           match = anchorReg.exec(data);
           if (urlReg.test(href) || !/https?/i.test(href)) {
             let newURL = urlm.resolve(url, href);
             if (/mailto:/i.test(href)) {
-              checkAndStore(href, miscLinks);
+              checkAndStoreURL(href, miscLinks);
             } else {
               if (urlReg.test(newURL)) {
                 contentType = await getContentType(newURL);
@@ -159,7 +167,7 @@ function connectTo(url) {
         // Get links to images
         match = imageReg.exec(data);
         while (match) {
-          src = match[5];
+          src = match[imageGroup];
           if (src[0] === '"')
             src = src.slice(1, src.length - 1);
 
@@ -174,7 +182,7 @@ function connectTo(url) {
         for (let path of localLinks) {
           let newURL = urlm.resolve(url, path);
           checkAndStoreURL(newURL, internalLinks);
-
+        
           // Remove protocol and query string
           let cleanURL = newURL.replace(/https?:\/\//i, '').replace(/\?.*/i, '');
           if (!visitedURLS.has(cleanURL) || visitedURLS.get(cleanURL) === false) {

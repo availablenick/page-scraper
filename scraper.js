@@ -15,6 +15,10 @@ let imageReg = /<img( |\r\n|\r|\n)+(((?!src).)+( |\r\n|\r|\n)+)?src( |\r\n|\r|\n
 let imageGroup = 7;
 let urlReg = null;
 
+let searchMode = 'default';
+if (process.argv[3])
+  searchMode = process.argv[3];
+
 new Promise((resolve) => {
   let inputURL = process.argv[2];
   if (!/https?:\/\//gi.test(inputURL))
@@ -56,10 +60,10 @@ new Promise((resolve) => {
   console.log('directory:', initialDirectoryURL);
   console.log('===================================');
 
-  visitedURLS.set(initialURL.replace(/https?:\/\//i, ''), true);
-  storedURLS.set(initialURL, true);
+  // Remove protocol and hash
+  let cleanURL = initialURL.replace(/https?:\/\//i, '').replace(/#.*/i, '');
+  visitedURLS.set(cleanURL, true);
   urlReg = new RegExp(infoURL.host + infoURL.pathname, 'i');
-  console.log('regex:', infoURL.host + infoURL.pathname);
 
   connectTo(initialURL)
     .then(() => {
@@ -183,18 +187,14 @@ function connectTo(url) {
           let newURL = urlm.resolve(url, path);
           checkAndStoreURL(newURL, internalLinks);
         
-          // Remove protocol and query string
-          let cleanURL = newURL.replace(/https?:\/\//i, '').replace(/\?.*/i, '');
-          if (process.argv[3])
-            var searchMode = process.argv[3];
-
           if (searchMode !== 'single-page') {
+            // Remove protocol and hash
+            let cleanURL = newURL.replace(/https?:\/\//i, '').replace(/#.*/i, '');
             if (!visitedURLS.has(cleanURL) || visitedURLS.get(cleanURL) === false) {
               visitedURLS.set(cleanURL, true);
               await connectTo(newURL);
             }
           }
-          
         }
 
         resolve();

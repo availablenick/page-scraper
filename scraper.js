@@ -15,12 +15,25 @@ let imageReg = /<img( |\r\n|\r|\n)+(((?!src).)+( |\r\n|\r|\n)+)?src( |\r\n|\r|\n
 let imageGroup = 7;
 let urlReg = null;
 
-let searchMode = 'default';
-if (process.argv[3])
-  searchMode = process.argv[3];
+let shouldFollowLinks = false;
 
 new Promise((resolve) => {
-  let inputURL = process.argv[2];
+  let inputURL = '';
+  for (let i = 2; i < process.argv.length; i++) {
+    arg = process.argv[i];
+    if (arg === '-a' || arg === '--addr')
+      if (i + 1 < process.argv.length)
+        inputURL = process.argv[i + 1];
+
+    if (arg === '-f' || arg === '--follow-links')
+      shouldFollowLinks = true;
+
+    if (arg === '-h' || arg === '--help') {
+      resolve(-1);
+      return;
+    }
+  }
+
   if (!/https?:\/\//gi.test(inputURL))
     inputURL = 'https://' + inputURL;
 
@@ -46,7 +59,16 @@ new Promise((resolve) => {
     });
   }
 })
-.then(initialURL => {
+.then(result => {
+  if (result === -1) {
+    console.log(
+      'Usage: node scraper.js [-a address | --addr address]',
+      '[-f | --follow-links]'
+    );
+    return;
+  }
+
+  let initialURL = result;
   let infoURL = new URL(initialURL);
   let initialDirectoryURL = getDirectoryURL(initialURL);
   if (initialDirectoryURL.length < infoURL.origin.length) {
@@ -187,7 +209,7 @@ function connectTo(url) {
           let newURL = urlm.resolve(url, path);
           checkAndStoreURL(newURL, internalLinks);
         
-          if (searchMode !== 'single-page') {
+          if (shouldFollowLinks) {
             // Remove protocol and hash
             let cleanURL = newURL.replace(/https?:\/\//i, '').replace(/#.*/i, '');
             if (!visitedURLS.has(cleanURL) || visitedURLS.get(cleanURL) === false) {

@@ -16,8 +16,10 @@ let imageReg = /<img( |\r\n|\r|\n)+(((?!src).)+( |\r\n|\r|\n)+)?src( |\r\n|\r|\n
 let imageGroup = 7;
 let urlReg = null;
 
-let shouldFollowLinks = false;
-let filename = '';
+let flagsOptions = {
+  f: false,
+  'write-to-file': '',
+};
 
 new Promise((resolve) => {
   let inputURL = '';
@@ -28,11 +30,11 @@ new Promise((resolve) => {
         inputURL = process.argv[i + 1];
 
     if (arg === '-f' || arg === '--follow-links')
-      shouldFollowLinks = true;
+      flagsOptions.f = true;
 
     if (arg === '--write-to-file')
       if (i + 1 < process.argv.length)
-        filename = process.argv[i + 1];
+        flagsOptions['write-to-file'] = process.argv[i + 1];
 
     if (arg === '-h' || arg === '--help') {
       resolve(-1);
@@ -135,7 +137,8 @@ new Promise((resolve) => {
 
       console.log(data);
       console.log('writing to file...');
-      if (filename !== '') {
+      if (flagsOptions['write-to-file'] !== '') {
+        filename = flagsOptions['write-to-file'];
         fs.writeFile(filename, data, (err) => {
           if (err)
             throw err;
@@ -228,7 +231,7 @@ function connectTo(url) {
           let newURL = urlm.resolve(url, path);
           checkAndStoreURL(newURL, internalLinks);
         
-          if (shouldFollowLinks) {
+          if (flagsOptions.f === true) {
             // Remove protocol and hash
             let cleanURL = newURL.replace(/https?:\/\//i, '').replace(/#.*/i, '');
             if (!visitedURLS.has(cleanURL) || visitedURLS.get(cleanURL) === false) {

@@ -16,9 +16,10 @@ let imageReg = /<img( |\r\n|\r|\n)+(((?!src).)+( |\r\n|\r|\n)+)?src( |\r\n|\r|\n
 let imageGroup = 7;
 let urlReg = null;
 
-let flagsOptions = {
+let optionFlags = {
   f: false,
   'write-to-file': '',
+  html: '',
 };
 
 new Promise((resolve) => {
@@ -30,11 +31,15 @@ new Promise((resolve) => {
         inputURL = process.argv[i + 1];
 
     if (arg === '-f' || arg === '--follow-links')
-      flagsOptions.f = true;
+      optionFlags.f = true;
 
     if (arg === '--write-to-file')
       if (i + 1 < process.argv.length)
-        flagsOptions['write-to-file'] = process.argv[i + 1];
+        optionFlags['write-to-file'] = process.argv[i + 1];
+
+    if (arg === '--html')
+      if (i + 1 < process.argv.length)
+        optionFlags.html = process.argv[i + 1];
 
     if (arg === '-h' || arg === '--help') {
       resolve(-1);
@@ -101,50 +106,81 @@ new Promise((resolve) => {
   connectTo(initialURL)
     .then(() => {
       let data = '';
+      let htmlData = '<html><body>';
       console.log('\n\n');
 
       if (internalLinks.length > 0) {
         data += '================= INTERNAL LINKS =================' + '\n\n';
+        htmlData += '<h1>Internal links</h1>';
         for (let i = 0; i < internalLinks.length; i++) {
           link = internalLinks[i];
           data += '    ' + i + ' ' + link + '\n';
+
+          if (optionFlags.html !== '') {
+            htmlData += '<ul><li><a href="' + link + '">' + link + '</a></li></ul>';
+          }
         }
       }
 
       if (imageLinks.length > 0) {
         data += '\n================= IMAGE LINKS =================' + '\n\n';
+        htmlData += '<h1>Image links</h1>';
         for (let i = 0; i < imageLinks.length; i++) {
           link = imageLinks[i];
           data += '    ' + i + ' ' + link + '\n';
+
+          if (optionFlags.html !== '') {
+            htmlData += '<ul><li><a href="' + link + '">' + link + '</a></li></ul>';
+          }
         }
       }
 
       if (externalLinks.length > 0) {
         data += '\n================= EXTERNAL LINKS =================' + '\n\n';
+        htmlData += '<h1>External links</h1>';
         for (let i = 0; i < externalLinks.length; i++) {
           link = externalLinks[i];
           data += '    ' + i + ' ' + link + '\n';
+
+          if (optionFlags.html !== '') {
+            htmlData += '<ul><li><a href="' + link + '">' + link + '</a></li></ul>';
+          }
         }
       }
 
       if (miscLinks.length > 0) {
         data += '\n================= MISC LINKS =================' + '\n\n';
+        htmlData += '<h1>Misc links</h1>';
         for (let i = 0; i < miscLinks.length; i++) {
           link = miscLinks[i];
           data += '    ' + i + ' ' + link + '\n';
+
+          if (optionFlags.html !== '') {
+            htmlData += '<ul><li><a href="' + link + '">' + link + '</a></li></ul>';
+          }
         }
       }
 
       console.log(data);
-      console.log('writing to file...');
-      if (flagsOptions['write-to-file'] !== '') {
-        filename = flagsOptions['write-to-file'];
-        fs.writeFile(filename, data, (err) => {
+      if (optionFlags.html !== '') {
+        htmlData += '</body></html>';
+        console.log('creating html file...');
+        filename = optionFlags.html;
+        fs.writeFile(filename, htmlData, (err) => {
           if (err)
             throw err;
 
           console.log('finished');
         });
+      } else if (optionFlags['write-to-file'] !== '') {
+          console.log('writing to file...');
+          filename = optionFlags['write-to-file'];
+          fs.writeFile(filename, data, (err) => {
+            if (err)
+              throw err;
+
+            console.log('finished');
+          });
       }
     });
 })
@@ -231,7 +267,7 @@ function connectTo(url) {
           let newURL = urlm.resolve(url, path);
           checkAndStoreURL(newURL, internalLinks);
         
-          if (flagsOptions.f === true) {
+          if (optionFlags.f === true) {
             // Remove protocol and hash
             let cleanURL = newURL.replace(/https?:\/\//i, '').replace(/#.*/i, '');
             if (!visitedURLS.has(cleanURL) || visitedURLS.get(cleanURL) === false) {

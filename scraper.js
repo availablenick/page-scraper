@@ -1,3 +1,4 @@
+const fs = require('fs');
 const https = require('https');
 const urlm = require('url');
 
@@ -16,6 +17,7 @@ let imageGroup = 7;
 let urlReg = null;
 
 let shouldFollowLinks = false;
+let filename = '';
 
 new Promise((resolve) => {
   let inputURL = '';
@@ -27,6 +29,10 @@ new Promise((resolve) => {
 
     if (arg === '-f' || arg === '--follow-links')
       shouldFollowLinks = true;
+
+    if (arg === '--write-to-file')
+      if (i + 1 < process.argv.length)
+        filename = process.argv[i + 1];
 
     if (arg === '-h' || arg === '--help') {
       resolve(-1);
@@ -62,9 +68,12 @@ new Promise((resolve) => {
 .then(result => {
   if (result === -1) {
     console.log(
-      'Usage: node scraper.js [-a address | --addr address]',
-      '[-f | --follow-links]'
+      'Usage: node scraper.js',
+      '[-a address | --addr address]',
+      '[-f | --follow-links]',
+      '[--write-to-file filename]'
     );
+
     return;
   }
 
@@ -89,41 +98,51 @@ new Promise((resolve) => {
 
   connectTo(initialURL)
     .then(() => {
+      let data = '';
       console.log('\n\n');
 
       if (internalLinks.length > 0) {
-        console.log('=================== INTERNAL LINKS ===================\n');
+        data += '================= INTERNAL LINKS =================' + '\n\n';
         for (let i = 0; i < internalLinks.length; i++) {
           link = internalLinks[i];
-          console.log('   ', i, link);
+          data += '    ' + i + ' ' + link + '\n';
         }
       }
 
       if (imageLinks.length > 0) {
-        console.log('\n=================== IMAGE LINKS ===================\n');
+        data += '\n================= IMAGE LINKS =================' + '\n\n';
         for (let i = 0; i < imageLinks.length; i++) {
           link = imageLinks[i];
-          console.log('   ', i, link);
+          data += '    ' + i + ' ' + link + '\n';
         }
       }
 
       if (externalLinks.length > 0) {
-        console.log('\n=================== EXTERNAL LINKS ===================\n');
+        data += '\n================= EXTERNAL LINKS =================' + '\n\n';
         for (let i = 0; i < externalLinks.length; i++) {
           link = externalLinks[i];
-          console.log('   ', i, link);
+          data += '    ' + i + ' ' + link + '\n';
         }
       }
 
       if (miscLinks.length > 0) {
-        console.log('\n=================== MISC LINKS ===================\n');
+        data += '\n================= MISC LINKS =================' + '\n\n';
         for (let i = 0; i < miscLinks.length; i++) {
           link = miscLinks[i];
-          console.log('   ', i, link);
+          data += '    ' + i + ' ' + link + '\n';
         }
       }
 
-      console.log();
+      console.log(data);
+      console.log('writing to file...');
+      if (filename !== '') {
+        fs.writeFile(filename, data, (err) => {
+          if (err)
+            throw err;
+
+          console.log('finished');
+        });
+      }
     });
 })
 
